@@ -28,8 +28,10 @@ local Colors = {
 	LCD = { 0x02, 0x33, 0xb2 }
 }
 
-input_count = 8
-output_count = 4
+input_count = 6
+output_count = 2
+ip_address = '192.168.1.39'
+
 -- We can let users determine some of the plugin properties by exposing them here
 -- While this function can be very useful, it is completely optional and not always needed.
 -- If no Properties are set here, only the position and fill properties of your plugin will show in the Properties pane
@@ -38,21 +40,21 @@ function GetProperties()
 		{
 			Name = "IP Address",
 			Type = "string",
-			Value = "127.0.0.1"
+			Value = "192.168.1.39"
 		},
 		{
 			Name = 'Input Count',
 			Type = 'integer',
 			Min = 2,
 			Max = 127,
-			Value = 8
+			Value = 6
 		},
 		{
 			Name = 'Output Count',
 			Type = 'integer',
 			Min = 1,
 			Max = 127,
-			Value = 4
+			Value = 2
 		}
 	}
 	return props
@@ -70,6 +72,7 @@ function GetControls(props)
 
 	input_count = props['Input Count'].Value
 	output_count = props['Output Count'].Value
+	ip_address = props['IP Address'].Value
 
 	local controls = {
 		{
@@ -82,7 +85,7 @@ function GetControls(props)
 	}
 
 	for i = 0, output_count do
-        for s = 0, input_count do
+        for s = 1, input_count do
             table.insert(
                 controls,
                 {
@@ -153,36 +156,20 @@ function GetControlLayout(props)
 		}
 	
 	elseif(page == 'Video Matrix') then 
-		for i = 0, input_count do
-			if (i == 0) then 
-				table.insert(
-					graphics,
-					{
-						Type = "Text",
-						Text = "No In",
-						Color = Colors.Black,
-						Position = {
-							(0 + 0),
-							(0 + (1.5 * 24)) + (i * 24)
-						},
-						Size = {32,24}
-					}
-				)
-			else
-				table.insert(
-					graphics,
-					{
-						Type = "Text",
-						Text = "In " .. i,
-						Color = Colors.Black,
-						Position = {
-							(0 + 0),
-							(0 + (1.5 * 24)) + (i * 24)
-						},
-						Size = {32,24}
-					}
-				)
-			end
+		for i = 1, input_count do
+			table.insert(
+				graphics,
+				{
+					Type = "Text",
+					Text = "In " .. i,
+					Color = Colors.Black,
+					Position = {
+						(0 + 0),
+						(0 + (1.5 * 24)) + (i * 24)
+					},
+					Size = {32,24}
+				}
+			)
 		end
 
 		for i = 0, output_count do
@@ -231,6 +218,12 @@ function GetControlLayout(props)
 end
 
 if (Controls) then
+
+	input_count = Properties['Input Count'].Value
+	output_count = Properties['Output Count'].Value
+
+	
+
 	local Kramer = {
 		socket = TcpSocket.New(),
 		setStatus = function (value, msg) 
@@ -253,12 +246,12 @@ if (Controls) then
 		}
 	}
 
-	function GetCmdString(bytes)
-		local cmd = ""
-		for k,v in pairs(bytes) do
-			cmd = cmd .. string.pack("B", v)
+	function Split(s, delimiter)
+		local result = {};
+		for match in (s..delimiter):gmatch("(.-)"..delimiter) do
+			table.insert(result, match);
 		end
-		return cmd
+		return result;
 	end
 
 	function SendCommand(cmd)
@@ -267,29 +260,57 @@ if (Controls) then
 		else
 			print("Following would have been sent if Kramer was connected")
 		end;
-		print(hex_dump(GetCmdString(cmd)))
+		print('Sent: ' .. cmd)
 		if Kramer.socket.IsConnected then
-			Kramer.socket:Write(GetCmdString(cmd))
+			Kramer.socket:Write(cmd..'\x0d')
 		end
 	end
 
 	--Instruction ROUTE
 
 	local function ROUTE_GET(layer, dest)
-		local command = "#ROUTE? " .. layer .. dest
+		local command = "#ROUTE? " .. layer ..','..dest
 		SendCommand(command)
 	end
 
 	local function ROUTE_SET(layer, dest, src, state)
 		if(state == 0) then
-			src = "x"
-			print("Disconnecting layer" .. layer .. " src from dest " .. dest)
+			dest = "x"
+			print("Disconnecting layer " .. layer .. " src from dest " .. dest)
 		else
-			print("Send layer " .. layer .. "from src " .. src .. " to dest " .. dest)
+			print("Send layer " .. layer .. " from src " .. src .. " to dest " .. dest)
 		end
 
-		local command = "#ROUTE " .. layer .. dest .. src
+		if dest == 0 then
+			dest = '*'
+		end
+
+		local command = "#ROUTE " .. layer ..','.. dest ..','.. src
 		SendCommand(command)
+	end
+
+	local function ROUTE_PARSE(msg)
+		if string.find(msg,'ERR') then
+			print('ROUTE message has returned an ERR: ' .. msg)
+		else
+			local msg_parts = Split(msg,' ')
+			local route_info = Split(msg_parts[2],',')
+			local layer =  route_info[1]
+			local dest = route_info[2]
+			local src = tonumber(route_info[3])
+
+			if layer == '1' then
+				for input = 1, input_count do
+					if (input ~= src) then
+						-- unselect every other source
+						Controls["vid-input_" .. input .. "-output_" .. dest].Value = 0
+					else
+						-- select the patched source
+						Controls["vid-input_" .. input .. "-output_" .. dest].Value = 1
+					end
+				end
+			end
+		end
 	end
 
 	function hex_dump (str)
@@ -327,12 +348,13 @@ if (Controls) then
 	end
 
 	Kramer.socket.Data = function ()
-		print("Reading " .. Kramer.socket.BufferLength .. " Bytes")
 		local data = Kramer.socket:Read(Kramer.socket.BufferLength);
-		print("Raw")
-		print(data)
-		print("Hex")
-		print(hex_dump(data))
+		if string.find(data, 'ROUTE') then
+			print('Received ROUTE response: ' .. data)
+			ROUTE_PARSE(data)
+		else
+			print('Unhandled Response: ' .. data)
+		end
 	end
 
 	Kramer.socket.Closed = function()
@@ -348,37 +370,26 @@ if (Controls) then
 		Kramer.setStatus(2,"Timeout in connection to Kramer")
 	end
 
+	
 
-	for o = 0, output_count do
-        for i = 0, input_count do
-            Controls["vid-input_" .. i .. "-output_" .. o].EventHandler = function()
-				if(o == 0) then
-					for output = 1, output_count do 
-						Controls["vid-input_"..i.."-output_"..output].Value = 0
-					end
-				else
-					Controls["vid-input_"..i.."-output_0"].Value = 0
-				end
-
-				for input = 0, input_count do
-					if (input ~= i) then
-						Controls["vid-input_"..input.."-output_"..o].Value = 0	
-					end
-				end
-				ROUTE_SET(Kramer.Layers.Video,i,o,Controls["vid-input_" .. i .. "-output_" .. o].Value)
-            end
-        end
-    end
-
-	if(Properties['IP Address'].Value ~= '') then
-		Kramer.setStatus(5, 'Connecting to Kramer');
-		Kramer.socket:Connect(Properties['IP Address'].Value, 5000);
-	else
-		-- disable all video matrix inputs
+	if(output_count > 0 and input_count > 0) then
 		for o = 0, output_count do
-			for i = 0, input_count do
-				Controls["vid-input_" .. i .. "-output_" .. o].IsDisabled = true;
+			for i = 1, input_count do
+				Controls["vid-input_" .. i .. "-output_" .. o].EventHandler = function()
+					ROUTE_SET(Kramer.Layers.Video,o,i,Controls["vid-input_" .. i .. "-output_" .. o].Value)
+					if(o == 0) then
+						-- let the individual output buttons track state
+						Controls["vid-input_" .. i .. "-output_"  .. o].Value = 0
+					end
+				end
 			end
 		end
 	end
+
+	if(Properties["IP Address"].Value ~= '') then
+		ip_address = Properties["IP Address"].Value
+		Kramer.setStatus(5, 'Connecting to Kramer @ ' .. ip_address);
+		Kramer.socket:Connect(ip_address, 5000);
+	end
+	
 end
