@@ -1,0 +1,384 @@
+-- Plugin for Kramer Protocol 3000
+-- Built in Lua
+
+-- Layout inspired by VideoHub plugin @ https://github.com/locimation/qsys-plugins
+
+PluginInfo = {
+    Name = "Kramer~Protocol 3000", -- The tilde here indicates folder structure in the Shematic Elements pane
+    Version = "0.1.0-master",
+    Id = "kramer-3000.plugin.0.1.0-master",
+    Description = "Plugin implementing Kramer Protocol 3000",
+    ShowDebug = true,
+    Author = "Joel Wetzell"
+}
+
+function GetPrettyName()
+	return "Kramer Protocol 3000"
+end
+
+-- Once you've drawn your plugin in Designer, you can determine what colors you use a lot. Save yourself some time by putting them in a table, and then simply calling them later.
+local Colors = {
+    White = {255, 255, 255},
+    Black = {0, 0, 0},
+    Red = {255, 0, 0},
+    Green = {0, 255, 0},
+    Blue = {0, 0, 255},
+	DarkGrey = {0x56,0x56,0x56},
+
+	LCD = { 0x02, 0x33, 0xb2 }
+}
+
+input_count = 8
+output_count = 4
+-- We can let users determine some of the plugin properties by exposing them here
+-- While this function can be very useful, it is completely optional and not always needed.
+-- If no Properties are set here, only the position and fill properties of your plugin will show in the Properties pane
+function GetProperties()
+	props = {
+		{
+			Name = "IP Address",
+			Type = "string",
+			Value = "127.0.0.1"
+		},
+		{
+			Name = 'Input Count',
+			Type = 'integer',
+			Min = 2,
+			Max = 127,
+			Value = 8
+		},
+		{
+			Name = 'Output Count',
+			Type = 'integer',
+			Min = 1,
+			Max = 127,
+			Value = 4
+		}
+	}
+	return props
+end
+
+-- The below function is optional (like GetProperties() is), but it can allow further customization of what users can and can't do with your plugin.
+-- In this example, when Model 1 is selected in the properties pane, the ability to modify some of the properties will be hidden, only allowing customization with Model 2
+-- Another application of this is if you have different input/output types for different models, and want those properties to be dynamic in the Properties pane
+function RectifyProperties(props)
+	return props
+end
+
+-- The below function is where you will populate the controls for your plugin.
+function GetControls(props)
+
+	input_count = props['Input Count'].Value
+	output_count = props['Output Count'].Value
+
+	local controls = {
+		{
+			Name = "Status",
+			ControlType = "Indicator",
+			IndicatorType = "Status",
+			PinStyle = "Output",
+			UserPin = true
+		}
+	}
+
+	for i = 0, output_count do
+        for s = 0, input_count do
+            table.insert(
+                controls,
+                {
+                    Name = "vid-input_" .. s .. "-output_" .. i,
+                    ControlType = "Button",
+                    ButtonType = "Toggle",
+                    PinStyle = "Both",
+                    UserPin = true
+                }
+            )
+        end
+    end
+	return controls
+end
+
+-- Variable holding Page Names for ease
+
+function GetPages(props) -- This function allows you to populate pages in your plugin.
+	local pages = {
+		{ name = 'System' },
+		{ name = 'Video Matrix' }
+	}
+	return pages
+end
+
+function GetControlLayout(props)
+	local page = GetPages(props)[props['page_index'].Value].name;
+
+	input_count = props['Input Count'].Value
+	output_count = props['Output Count'].Value
+
+	local layout = {};
+  	local graphics = {};
+
+	local function label(graphic)
+		for k,v in pairs({
+			Type = 'Label',
+			Color = { 0, 0, 0 },
+			HTextAlign = 'Right',
+			FontSize = 14
+		}) do graphic[k] = graphic[k] or v; end;
+		table.insert(graphics, graphic);
+	end;
+
+	local function textinput(layout)
+		for k,v in pairs({
+		  Color = { 208, 208, 208 },
+		  StrokeColor = { 102, 102, 102 },
+		  StrokeWidth = 2,
+		  CornerRadius = 8,
+		  FontSize = 12,
+		  Margin = 10,
+		  TextBoxStyle = 'Normal'
+		}) do layout[k] = layout[k] or v; end;
+		return layout;
+	  end;
+	
+	if(page == 'System') then
+
+		layout['Status'] = {
+			Style = "Text",
+			Color = { 0x02, 0x33, 0xb2 },
+			TextSize = 10,
+			UserPin = true,
+			PinStyle = "Output",
+			Size = {200,100},
+			Position = {0,0}
+		}
+	
+	elseif(page == 'Video Matrix') then 
+		for i = 0, input_count do
+			if (i == 0) then 
+				table.insert(
+					graphics,
+					{
+						Type = "Text",
+						Text = "No In",
+						Color = Colors.Black,
+						Position = {
+							(0 + 0),
+							(0 + (1.5 * 24)) + (i * 24)
+						},
+						Size = {32,24}
+					}
+				)
+			else
+				table.insert(
+					graphics,
+					{
+						Type = "Text",
+						Text = "In " .. i,
+						Color = Colors.Black,
+						Position = {
+							(0 + 0),
+							(0 + (1.5 * 24)) + (i * 24)
+						},
+						Size = {32,24}
+					}
+				)
+			end
+		end
+
+		for i = 0, output_count do
+			if (i == 0) then
+				table.insert(
+					graphics,
+					{
+						Type = "Text",
+						Text = "Out\rAll",
+						Color = Colors.Black,
+						Position = {0 + ((i+1) * 32), (0 + (0.5 * 24))},
+						Size = {32,24}
+					}
+				)
+			else
+				table.insert(
+					graphics,
+					{
+						Type = "Text",
+						Text = "Out\r" .. i,
+						Color = Colors.Black,
+						Position = {0 + ((i+1) * 32), (0 + (0.5 * 24))},
+						Size = {32,24}
+					}
+				)
+			end
+		end
+
+		for o = 0, output_count do -- For each output
+			for i = 0, input_count do -- For each input
+				layout["vid-input_" .. i .. "-output_" .. o] = {
+					PrettyName = "Output " .. o .. "~In" .. i .. " -> Out" .. o,
+					Style = "Button",
+					Legend = tostring(i),
+					Position = {
+						0 + ((o+1) * 32),
+						0 + (1.5 * 24 + (i * 24))
+					},
+					Size = {32,24}
+				}
+			end
+		end
+	end;
+	
+	return layout, graphics
+end
+
+if (Controls) then
+	local Kramer = {
+		socket = TcpSocket.New(),
+		setStatus = function (value, msg) 
+			-- 0 = OK
+			-- 1 = Compromised
+			-- 2 = Fault
+			-- 3 = Not Present
+			-- 4 = Missing
+			-- 5 = Initializing
+			-- >5 = Fault
+			Controls['Status'].Value = value;
+			Controls['Status'].String = msg;
+		end,
+		Layers = {
+			Video = 1,
+			Audio = 2,
+			Data = 3,
+			IR = 4,
+			USB = 5
+		}
+	}
+
+	function GetCmdString(bytes)
+		local cmd = ""
+		for k,v in pairs(bytes) do
+			cmd = cmd .. string.pack("B", v)
+		end
+		return cmd
+	end
+
+	function SendCommand(cmd)
+		if Kramer.socket.IsConnected then 
+			print("Sending packet to connected Kramer")
+		else
+			print("Following would have been sent if Kramer was connected")
+		end;
+		print(hex_dump(GetCmdString(cmd)))
+		if Kramer.socket.IsConnected then
+			Kramer.socket:Write(GetCmdString(cmd))
+		end
+	end
+
+	--Instruction ROUTE
+
+	local function ROUTE_GET(layer, dest)
+		local command = "#ROUTE? " .. layer .. dest
+		SendCommand(command)
+	end
+
+	local function ROUTE_SET(layer, dest, src, state)
+		if(state == 0) then
+			src = "x"
+			print("Disconnecting layer" .. layer .. " src from dest " .. dest)
+		else
+			print("Send layer " .. layer .. "from src " .. src .. " to dest " .. dest)
+		end
+
+		local command = "#ROUTE " .. layer .. dest .. src
+		SendCommand(command)
+	end
+
+	function hex_dump (str)
+		local len = string.len( str )
+		local dump = ""
+		local hex = ""
+		local asc = ""
+		
+		for i = 1, len do
+			if 1 == i % 8 then
+				dump = dump .. hex .. asc .. "\n"
+				hex = string.format( "%04x: ", i - 1 )
+				asc = ""
+			end
+			
+			local ord = string.byte( str, i )
+			hex = hex .. string.format( "%02x ", ord )
+			if ord >= 32 and ord <= 126 then
+				asc = asc .. string.char( ord )
+			else
+				asc = asc .. "."
+			end
+		end
+		return dump .. hex .. string.rep( "   ", 8 - len % 8 ) .. asc
+	end
+
+	Kramer.socket.Reconnect = function()
+		Kramer.setStatus(5,"Attempting to reconnect")
+	end
+
+	Kramer.socket.Connected = function()
+		print("TCP Connection Established to Kramer @ " .. Properties['IP Address'].Value)
+		Kramer.setStatus(0,"Connected")
+		ROUTE_GET(Kramer.Layers.Video,'*')
+	end
+
+	Kramer.socket.Data = function ()
+		print("Reading " .. Kramer.socket.BufferLength .. " Bytes")
+		local data = Kramer.socket:Read(Kramer.socket.BufferLength);
+		print("Raw")
+		print(data)
+		print("Hex")
+		print(hex_dump(data))
+	end
+
+	Kramer.socket.Closed = function()
+		Kramer.setStatus(2,"Connection closed by Kramer")
+	end
+
+	Kramer.socket.Error = function(sock, err)
+		print("TCP Socket Error: ", err)
+		Kramer.setStatus(2,"Communication error with Kramer")
+	end
+
+	Kramer.socket.Timeout = function(sock, err)
+		Kramer.setStatus(2,"Timeout in connection to Kramer")
+	end
+
+
+	for o = 0, output_count do
+        for i = 0, input_count do
+            Controls["vid-input_" .. i .. "-output_" .. o].EventHandler = function()
+				if(o == 0) then
+					for output = 1, output_count do 
+						Controls["vid-input_"..i.."-output_"..output].Value = 0
+					end
+				else
+					Controls["vid-input_"..i.."-output_0"].Value = 0
+				end
+
+				for input = 0, input_count do
+					if (input ~= i) then
+						Controls["vid-input_"..input.."-output_"..o].Value = 0	
+					end
+				end
+				ROUTE_SET(Kramer.Layers.Video,i,o,Controls["vid-input_" .. i .. "-output_" .. o].Value)
+            end
+        end
+    end
+
+	if(Properties['IP Address'].Value ~= '') then
+		Kramer.setStatus(5, 'Connecting to Kramer');
+		Kramer.socket:Connect(Properties['IP Address'].Value, 5000);
+	else
+		-- disable all video matrix inputs
+		for o = 0, output_count do
+			for i = 0, input_count do
+				Controls["vid-input_" .. i .. "-output_" .. o].IsDisabled = true;
+			end
+		end
+	end
+end

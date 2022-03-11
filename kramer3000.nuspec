@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!-- Initially generated manually using `nuget spec`-->
+<package >
+  <metadata>
+    <id>Kramer-3000</id>
+    <version>0.1.0-master</version>
+    <title>Kramer Protocol 3000</title>
+    <authors>Joel Wetzell</authors>
+    <owners>Joel Wetzell</owners>
+    <license type="expression">GPL-3.0-or-later</license>
+    <projectUrl>https://github.com/jwetzell/q-sys-plugin-kramer32000</projectUrl>
+    <iconUrl>http://content/images/Kramer-logo.png</iconUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Kramer Procotol 3000 Plugin</description>
+    <releaseNotes>AutoGenerateFromGitCommitMessages</releaseNotes>
+    <copyright>Copyright 2021</copyright>
+    <tags>Kramer Protocol 3000</tags>
+    <summary>A plugin for control via the Kramer 3000 Protocol</summary>
+  </metadata>
+  <files>
+    <file src="content\**" target="content" />
+  </files>
+</package>
