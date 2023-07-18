@@ -28,8 +28,8 @@ local Colors = {
 	LCD = { 0x02, 0x33, 0xb2 }
 }
 
-input_count = 6
-output_count = 2
+video_input_count = 6
+video_output_count = 2
 ip_address = '127.0.0.1'
 
 -- We can let users determine some of the plugin properties by exposing them here
@@ -43,14 +43,28 @@ function GetProperties()
 			Value = "127.0.0.1"
 		},
 		{
-			Name = 'Input Count',
+			Name = 'Video Input Count',
 			Type = 'integer',
 			Min = 2,
 			Max = 127,
 			Value = 6
 		},
 		{
-			Name = 'Output Count',
+			Name = 'Video Output Count',
+			Type = 'integer',
+			Min = 1,
+			Max = 127,
+			Value = 2
+		},
+		{
+			Name = 'Audio Input Count',
+			Type = 'integer',
+			Min = 2,
+			Max = 127,
+			Value = 6
+		},
+		{
+			Name = 'Audio Output Count',
 			Type = 'integer',
 			Min = 1,
 			Max = 127,
@@ -70,8 +84,12 @@ end
 -- The below function is where you will populate the controls for your plugin.
 function GetControls(props)
 
-	input_count = props['Input Count'].Value
-	output_count = props['Output Count'].Value
+	video_input_count = props['Video Input Count'].Value
+	video_output_count = props['Video Output Count'].Value
+
+	audio_input_count = props['Audio Input Count'].Value
+	audio_output_count = props['Audio Output Count'].Value
+
 	ip_address = props['IP Address'].Value
 
 	local controls = {
@@ -84,12 +102,27 @@ function GetControls(props)
 		}
 	}
 
-	for i = 0, output_count do
-        for s = 1, input_count do
+	for i = 0, video_output_count do
+        for s = 1, video_input_count do
             table.insert(
                 controls,
                 {
-                    Name = "vid-input_" .. s .. "-output_" .. i,
+                    Name = "video-input_" .. s .. "-output_" .. i,
+                    ControlType = "Button",
+                    ButtonType = "Toggle",
+                    PinStyle = "Both",
+                    UserPin = true
+                }
+            )
+        end
+    end
+
+	for i = 0, audio_output_count do
+        for s = 1, audio_input_count do
+            table.insert(
+                controls,
+                {
+                    Name = "audio-input_" .. s .. "-output_" .. i,
                     ControlType = "Button",
                     ButtonType = "Toggle",
                     PinStyle = "Both",
@@ -106,7 +139,8 @@ end
 function GetPages(props) -- This function allows you to populate pages in your plugin.
 	local pages = {
 		{ name = 'System' },
-		{ name = 'Video Matrix' }
+		{ name = 'Video Matrix' },
+		{ name = 'Audio Matrix' }
 	}
 	return pages
 end
@@ -114,8 +148,11 @@ end
 function GetControlLayout(props)
 	local page = GetPages(props)[props['page_index'].Value].name;
 
-	input_count = props['Input Count'].Value
-	output_count = props['Output Count'].Value
+	video_input_count = props['Video Input Count'].Value
+	video_output_count = props['Video Output Count'].Value
+
+	audio_input_count = props['Audio Input Count'].Value
+	audio_output_count = props['Audio Output Count'].Value
 
 	local layout = {};
   	local graphics = {};
@@ -156,7 +193,7 @@ function GetControlLayout(props)
 		}
 	
 	elseif(page == 'Video Matrix') then 
-		for i = 1, input_count do
+		for i = 1, video_input_count do
 			table.insert(
 				graphics,
 				{
@@ -172,7 +209,7 @@ function GetControlLayout(props)
 			)
 		end
 
-		for o = 0, output_count do
+		for o = 0, video_output_count do
 			if (o == 0) then
 				table.insert(
 					graphics,
@@ -189,7 +226,7 @@ function GetControlLayout(props)
 					graphics,
 					{
 						Type = "Text",
-						Text = "Out\r" .. i,
+						Text = "Out\r" .. o,
 						Color = Colors.Black,
 						Position = {0 + ((o+1) * 32), (0 + (0.5 * 24))},
 						Size = {32,24}
@@ -198,9 +235,67 @@ function GetControlLayout(props)
 			end
 		end
 
-		for o = 0, output_count do -- For each output
-			for i = 1, input_count do -- For each input
-				layout["vid-input_" .. i .. "-output_" .. o] = {
+		for o = 0, video_output_count do -- For each output
+			for i = 1, video_input_count do -- For each input
+				layout["video-input_" .. i .. "-output_" .. o] = {
+					PrettyName = "In" .. i .. " -> Out" .. o,
+					Style = "Button",
+					Legend = tostring(i),
+					Position = {
+						0 + ((o+1) * 32),
+						0 + (1.5 * 24 + ((i-1) * 24))
+					},
+					Size = {32,24}
+				}
+			end
+		end
+
+	elseif(page == 'Audio Matrix') then 
+		for i = 1, audio_input_count do
+			table.insert(
+				graphics,
+				{
+					Type = "Text",
+					Text = "In " .. i,
+					Color = Colors.Black,
+					Position = {
+						(0 + 0),
+						(0 + (1.5 * 24)) + ((i-1) * 24)
+					},
+					Size = {32,24}
+				}
+			)
+		end
+
+		for o = 0, audio_output_count do
+			if (o == 0) then
+				table.insert(
+					graphics,
+					{
+						Type = "Text",
+						Text = "Out\rAll",
+						Color = Colors.Black,
+						Position = {0 + ((o+1) * 32), (0 + (0.5 * 24))},
+						Size = {32,24}
+					}
+				)
+			else
+				table.insert(
+					graphics,
+					{
+						Type = "Text",
+						Text = "Out\r" .. o,
+						Color = Colors.Black,
+						Position = {0 + ((o+1) * 32), (0 + (0.5 * 24))},
+						Size = {32,24}
+					}
+				)
+			end
+		end
+
+		for o = 0, audio_output_count do -- For each output
+			for i = 1, audio_input_count do -- For each input
+				layout["audio-input_" .. i .. "-output_" .. o] = {
 					PrettyName = "In" .. i .. " -> Out" .. o,
 					Style = "Button",
 					Legend = tostring(i),
@@ -219,8 +314,8 @@ end
 
 if (Controls) then
 
-	input_count = Properties['Input Count'].Value
-	output_count = Properties['Output Count'].Value
+	video_input_count = Properties['Video Input Count'].Value
+	video_output_count = Properties['Video Output Count'].Value
 
 	
 
@@ -300,16 +395,29 @@ if (Controls) then
 			local src = tonumber(route_info[3])
 
 			if layer == '1' then
-				for input = 1, input_count do
+				for input = 1, video_input_count do
 					if (input ~= src) then
 						-- unselect every other source
-						Controls["vid-input_" .. input .. "-output_" .. dest].Value = 0
+						Controls["video-input_" .. input .. "-output_" .. dest].Value = 0
 					else
 						-- select the patched source
-						Controls["vid-input_" .. input .. "-output_" .. dest].Value = 1
+						Controls["video-input_" .. input .. "-output_" .. dest].Value = 1
 					end
 				end
 			end
+
+			if layer == '2' then
+				for input = 1, audio_input_count do
+					if (input ~= src) then
+						-- unselect every other source
+						Controls["audio-input_" .. input .. "-output_" .. dest].Value = 0
+					else
+						-- select the patched source
+						Controls["audio-input_" .. input .. "-output_" .. dest].Value = 1
+					end
+				end
+			end
+
 		end
 	end
 
@@ -345,6 +453,7 @@ if (Controls) then
 		print("TCP Connection Established to Kramer @ " .. Properties['IP Address'].Value)
 		Kramer.setStatus(0,"Connected")
 		ROUTE_GET(Kramer.Layers.Video,'*')
+		ROUTE_GET(Kramer.Layers.Audio,'*')
 	end
 
 	Kramer.socket.Data = function ()
@@ -372,14 +481,28 @@ if (Controls) then
 
 	
 
-	if(output_count > 0 and input_count > 0) then
-		for o = 0, output_count do
-			for i = 1, input_count do
-				Controls["vid-input_" .. i .. "-output_" .. o].EventHandler = function()
-					ROUTE_SET(Kramer.Layers.Video,o,i,Controls["vid-input_" .. i .. "-output_" .. o].Value)
+	if(video_output_count > 0 and video_input_count > 0) then
+		for o = 0, video_output_count do
+			for i = 1, video_input_count do
+				Controls["video-input_" .. i .. "-output_" .. o].EventHandler = function()
+					ROUTE_SET(Kramer.Layers.Video,o,i,Controls["video-input_" .. i .. "-output_" .. o].Value)
 					if(o == 0) then
 						-- let the individual output buttons track state
-						Controls["vid-input_" .. i .. "-output_"  .. o].Value = 0
+						Controls["video-input_" .. i .. "-output_"  .. o].Value = 0
+					end
+				end
+			end
+		end
+	end
+
+	if(audio_output_count > 0 and audio_input_count > 0) then
+		for o = 0, audio_output_count do
+			for i = 1, audio_input_count do
+				Controls["audio-input_" .. i .. "-output_" .. o].EventHandler = function()
+					ROUTE_SET(Kramer.Layers.Audio,o,i,Controls["audio-input_" .. i .. "-output_" .. o].Value)
+					if(o == 0) then
+						-- let the individual output buttons track state
+						Controls["audio-input_" .. i .. "-output_"  .. o].Value = 0
 					end
 				end
 			end
